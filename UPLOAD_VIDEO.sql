@@ -3,7 +3,7 @@
 -- http://www.phpmyadmin.net
 --
 -- Host: localhost
--- Generation Time: Oct 24, 2017 at 08:47 PM
+-- Generation Time: Oct 24, 2017 at 08:50 PM
 -- Server version: 5.7.19-0ubuntu0.16.04.1
 -- PHP Version: 7.0.22-0ubuntu0.16.04.1
 
@@ -37,18 +37,6 @@ CREATE TABLE `UPLOAD_VIDEO` (
   `LAST_TRANSCODED_STREAMLET_360P` int(11) NOT NULL DEFAULT '0',
   `LAST_TRANSCODED_STREAMLET_480P` int(11) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
---
--- Dumping data for table `UPLOAD_VIDEO`
---
-
-INSERT INTO `UPLOAD_VIDEO` (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES
-(1, 12345, '1', 1, 1, '2017-09-26 09:09:05', 0, 0, 0),
-(9, 123, 'TestTitle', 2, 1, '2017-10-05 13:55:15', 0, 0, 0),
-(10, 3454, 'testt', 2, 7, '2017-10-11 12:13:33', 0, 0, 0),
-(11, 123, 'NewVid', 3, 2, '2017-10-11 14:51:04', 0, 0, 0),
-(12, 123, 'TestVid', 4, 2, '2017-10-18 14:40:48', 0, 0, 0),
-(13, 123, 'hgf', 4, 1, '2017-10-18 14:44:11', 0, 0, 0);
 
 --
 -- Indexes for dumped tables
