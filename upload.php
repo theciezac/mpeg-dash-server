@@ -2,20 +2,22 @@
 // PARAMETERS EXPECTED
 // $_POST["deviceId"];
 // $_POST["videoTitle"];
-// $_POST["streamlets"]
+// $_POST["totalStreamlets"]
+// $_POST["streamletNo"];
 // $_FILES["fileToUpload"]["name"])
 
 //header('Content-type: application/json');
-
+define ('SITE_ROOT', realpath(dirname(__FILE__)));
 $servername = "localhost";
 $username = "team07";
 $password = "cs5248team07";
 $db = "team07";
 
-$myfile = fopen("uploadphp.log", "w") or die("Unable to open file!");
+$myfile = fopen("uploadphp.log", "w+") or die("Unable to open file!");
 fwrite($myfile, "deviceId: ".$_POST["deviceId"]."\n");
 fwrite($myfile, "videoTitle: ".$_POST["videoTitle"]."\n");
-fwrite($myfile, "(number of) streamlets: ".$_POST["streamlets"]."\n");
+fwrite($myfile, "Total streamlets: ".$_POST["totalStreamlets"]."\n");
+fwrite($myfile, "Streamlet no: ".$_POST["streamletNo"]."\n");
 
 // ini_set ( string $varname , string $newvalue )
 ini_set("upload_max_filesize", "40M");
@@ -74,7 +76,7 @@ if ($uploadOk == 0) {
 
 // if everything is ok, try to upload file
 } else {
-    $file_dir = "video_repo/" . $_POST["videoTitle"];
+    $file_dir = SITE_ROOT."/video_repo/" . $_POST["videoTitle"];
     if (!file_exists($file_dir)) {
         shell_exec ("mkdir " . $file_dir);
         shell_exec ("chmod 777 " . $file_dir);
@@ -88,7 +90,7 @@ if ($uploadOk == 0) {
         shell_exec ("mkdir " . $file_dir . "/480p");
         shell_exec ("chmod 777 " . $file_dir . "/480p");
     }
-    $moveResult = move_uploaded_file($_FILES["fileToUpload"]["tmp_name"], $target_file);
+    $moveResult = move_uploaded_file($_FILES["fileToUpload"]["tmp_name"], SITE_ROOT."/".$target_file);
     if ($moveResult) {
         echo "The file ". basename( $_FILES["fileToUpload"]["name"]). " has been uploaded.<br/>";
     } else {
@@ -103,7 +105,7 @@ $findQuery = "SELECT * FROM UPLOAD_VIDEO WHERE VIDEO_TITLE = '" . $_POST["videoT
 $uploadedNumberOfStreamlets = 0;
 $newNumberOfStreamlets = 0;
 
-$insertQuery = "INSERT INTO UPLOAD_VIDEO (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES (NULL, '" . $_POST["deviceId"] . "', '" . $_POST["videoTitle"] . "', " . $_POST["streamlets"] . ", '1', CURRENT_TIMESTAMP, '0', '0', '0');";
+$insertQuery = "INSERT INTO UPLOAD_VIDEO (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES (NULL, '" . $_POST["deviceId"] . "', '" . $_POST["videoTitle"] . "', " . $_POST["totalStreamlets"] . ", '1', CURRENT_TIMESTAMP, '0', '0', '0');";
 
 $findResult = $conn->query($findQuery);
 if ($findResult->num_rows > 0) {
@@ -142,28 +144,45 @@ if ($findResult->num_rows > 0) {
 }
 echo "<br/></p><p>";
 
-$transcodeCommand240p = "nohup ./transcode.sh " . $target_file . " 240p ". $file_dir . " &>> video_repo/" . $_POST["videoTitle"] . "/nohup.out &";
-$transcodeCommand360p = "nohup ./transcode.sh " . $target_file . " 360p ". $file_dir . " &>> video_repo/" . $_POST["videoTitle"] . "/nohup.out &";
-$transcodeCommand480p = "nohup ./transcode.sh " . $target_file . " 480p ". $file_dir . " &>> video_repo/" . $_POST["videoTitle"] . "/nohup.out &";
+// $transcodeCommand240p = "nohup ".SITE_ROOT."/transcode.sh " . $target_file . " 240p ". $file_dir . " &>> video_repo/" . $_POST["videoTitle"] . "/nohup.out &";
+// $transcodeCommand360p = "nohup ".SITE_ROOT."/transcode.sh " . $target_file . " 360p ". $file_dir . " &>> video_repo/" . $_POST["videoTitle"] . "/nohup.out &";
+// $transcodeCommand480p = "nohup ".SITE_ROOT."/transcode.sh " . $target_file . " 480p ". $file_dir . " &>> video_repo/" . $_POST["videoTitle"] . "/nohup.out &";
 
-$runningtranscoderstr = shell_exec("echo running transcoder...");
+
+$transcodeCommand240p = SITE_ROOT."/transcode.sh " . $target_file . " 240p ". $file_dir . " ". $_POST["streamletNo"]; 
+$transcodeCommand360p = SITE_ROOT."/transcode.sh " . $target_file . " 360p ". $file_dir . " ". $_POST["streamletNo"];
+$transcodeCommand480p = SITE_ROOT."/transcode.sh " . $target_file . " 480p ". $file_dir . " ". $_POST["streamletNo"];
+
+
+$runningtranscoderstr = shell_exec("echo running transcoder...<br/>");
 echo $runningtranscoderstr;
 
-$e1 = shell_exec($transcodeCommand240p);
-echo $transcodeCommand240p;
-echo $e1;
+exec($transcodeCommand240p, $output240p, $status240p);
+echo $transcodeCommand240p."<br/>";
+echo "Transcode 240p exit status: ".$status240p."<br/>";
+fwrite($myfile, "Transcode 240p exit status ".$status240p.", output: ".$output240p[0]."\n");
+if (end($output240p) == "[0][0]") {
+    $quality = "240p";
+    include("updateSqlTranscodeStatus.php");
+}
 
-$e2 = shell_exec($transcodeCommand360p);
-echo $transcodeCommand360p;
-echo $e2;
+exec($transcodeCommand360p, $output360p, $status360p);
+echo $transcodeCommand360p."<br/>";
+echo "Transcode 360p exit status: ".$status360p."<br/>";
+fwrite($myfile, "Transcode 360p exit status ".$status360p.", output: ".$output360p[0]."\n");
+if (end($output360p) == "[0][0]") {
+    $quality = "360p";
+    include("updateSqlTranscodeStatus.php");
+}
 
-$e3 = shell_exec($transcodeCommand480p);
-echo $transcodeCommand480p;
-echo $e3;
-
-$createMpdFileCommand =  "php createMpdFile.php " . $_POST["videoTitle"];
-
-exec($createMpdFileCommand);
+exec($transcodeCommand480p, $output480p, $status480p);
+echo $transcodeCommand480p."<br/>";
+echo "Transcode 480p exit status: ".$status480p."<br/>";
+fwrite($myfile, "Transcode 480p exit status ".$status480p.", output: ".$output480p[0]."\n");
+if (end($output480p) == "[0][0]") {
+    $quality = "480p";
+    include("updateSqlTranscodeStatus.php");
+}
 
 echo "</p>";
 mysqli_close($conn);
