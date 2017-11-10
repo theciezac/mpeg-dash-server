@@ -148,6 +148,7 @@ if ($findResult->num_rows > 0) {
     }
 }
 
+
 $initialAvailableVideos = 0;
 // Retrieve initial count of AVAILABLE_VIDEOS
 $initialAvailableResult = $conn->query("SELECT COUNT(*) FROM AVAILABLE_VIDEOS;");
@@ -165,9 +166,7 @@ $transcodeCommand360p = SITE_ROOT."/transcode.sh " . $target_file . " 360p ". $f
 $transcodeCommand480p = SITE_ROOT."/transcode.sh " . $target_file . " 480p ". $file_dir . " ". $_POST["streamletNo"];
 
 $runningtranscoderstr = shell_exec("echo running transcoder...<br/>");
-
 exec($transcodeCommand240p, $output240p, $status240p);
-
 fwrite($myfile, "Transcode 240p exit status ".$status240p.", output: ".$output240p[0]."\n");
 if (end($output240p) == "[0][0]") {
     $quality = "240p";
@@ -175,13 +174,11 @@ if (end($output240p) == "[0][0]") {
 }
 
 exec($transcodeCommand360p, $output360p, $status360p);
-
 fwrite($myfile, "Transcode 360p exit status ".$status360p.", output: ".$output360p[0]."\n");
 if (end($output360p) == "[0][0]") {
     $quality = "360p";
     include("updateSqlTranscodeStatus.php");
 }
-
 exec($transcodeCommand480p, $output480p, $status480p);
 
 fwrite($myfile, "Transcode 480p exit status ".$status480p.", output: ".$output480p[0]."\n");
