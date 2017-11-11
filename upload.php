@@ -237,6 +237,32 @@ function createM3U8VariantPlaylist($videoName) {
     fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist240pDir . "\n");
 
     fclose($videoM3U8File);
+
+    // Add to src/list.media.json
+    $fullVideoUri = "http://monterosa.d2.comp.nus.edu.sg/~team07/video_repo/$videoName/$videoName.m3u8";
+
+    $json = file_get_contents("src/list.media.json");
+    $originalJsonDecode = json_decode($json, JSON_OBJECT_AS_ARRAY);
+    fwrite($myfile, "Existing size in JSON list: " . sizeof($originalJsonDecode) ."\n");
+
+    $newJsonEntry = array(
+        "name" => $videoName." (M3U8)",
+        "uri" => $fullVideoUri
+    );
+
+    array_unshift($originalJsonDecode, $newJsonEntry);
+    fwrite($myfile, "JSON entry prepared.\n");
+
+    // $newJsonStr = substr(stripcslashes(json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)), 1, -1);
+    $newJsonStr = json_encode($originalJsonDecode, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    // include_once("formatJson.php");
+    // fwrite($myfile, "Indenting JSON file...\n");
+    // $indentJson = indent($newJsonStr);
+
+    fwrite($myfile, "New Json Str: " . $newJsonStr);
+    $newJsonFile = fopen("src/list.media.json", "w+") or die("Unable to open list.media.json!");
+    fwrite($newJsonFile, $newJsonStr);
+    fclose($newJsonFile);
 }
 
 function createMpdPlaylist($videoName) {
