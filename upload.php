@@ -17,7 +17,7 @@ $username = "team07";
 $password = "cs5248team07";
 $db = "team07";
 
-$myfile = fopen("uploadphp.log", "w+") or die("Unable to open file!");
+$myfile = fopen("uploadphp.log", "w+") or die("Unable to open uploadphp.log!");
 fwrite($myfile, "deviceId: ".$_POST["deviceId"]."\n");
 fwrite($myfile, "videoTitle: ".$_POST["videoTitle"]."\n");
 fwrite($myfile, "Total streamlets: ".$_POST["totalStreamlets"]."\n");
@@ -148,7 +148,6 @@ if ($findResult->num_rows > 0) {
     }
 }
 
-
 $initialAvailableVideos = 0;
 // Retrieve initial count of AVAILABLE_VIDEOS
 $initialAvailableResult = $conn->query("SELECT COUNT(*) FROM AVAILABLE_VIDEOS;");
@@ -165,7 +164,7 @@ $transcodeCommand240p = SITE_ROOT."/transcode.sh " . $target_file . " 240p ". $f
 $transcodeCommand360p = SITE_ROOT."/transcode.sh " . $target_file . " 360p ". $file_dir . " ". $_POST["streamletNo"];
 $transcodeCommand480p = SITE_ROOT."/transcode.sh " . $target_file . " 480p ". $file_dir . " ". $_POST["streamletNo"];
 
-$runningtranscoderstr = shell_exec("echo running transcoder...<br/>");
+fwrite($myfile, "Transcode command: ". $transcodeCommand240p . "\n");
 exec($transcodeCommand240p, $output240p, $status240p);
 fwrite($myfile, "Transcode 240p exit status ".$status240p.", output: ".$output240p[0]."\n");
 if (end($output240p) == "[0][0]") {
@@ -203,6 +202,46 @@ if ($finalAvailableVideos - $initialAvailableVideos == 0) {
     fwrite($myfile, "No change in total number of available videos.\n");
 } else {
     fwrite($myfile, "New available video. To create playlists...\n");
+    createM3U8VariantPlaylist($videoTitle);
+    createMpdPlaylist($videoTitle);
+}
+
+function createM3U8VariantPlaylist($videoName) {
+    global $myfile;
+    $videoDir =  "video_repo/". $videoName;
+    $playlist480pDir = $videoDir . "/480p/480p.m3u8";
+    $playlist360pDir = $videoDir . "/360p/360p.m3u8";
+    $playlist240pDir = $videoDir . "/240p/240p.m3u8";
+    $m3u8_480p = fopen($playlist480pDir, "a+") or die("Unable to open $playlist480pDir");
+    $m3u8_360p = fopen($playlist360pDir, "a+") or die("Unable to open $playlist360pDir");
+    $m3u8_240p = fopen($playlist240pDir, "a+") or die("Unable to open $playlist240pDir");
+    fwrite($m3u8_480p, "#EXT-X-ENDLIST");
+    fwrite($m3u8_360p, "#EXT-X-ENDLIST");
+    fwrite($m3u8_240p, "#EXT-X-ENDLIST");
+    fwrite($myfile, "Completed quality playlists.");
+    fclose($m3u8_480p);
+    fclose($m3u8_360p);
+    fclose($m3u8_240p);
+
+    $videoM3U8Dir = $videoDir."/".$videoName.".m3u8";
+    $videoM3U8File = fopen($videoM3U8Dir, "w+") or die ("Unable to create $videoM3U8File");
+    fwrite($videoM3U8File, "#EXTM3U\n");
+
+    fwrite($videoM3U8File, "#EXT-X-STREAM:INF:PROGRAM-ID=1,BANDWIDTH=2800000,CODECS=\"avc1.64001F,mp4a.40.2\"\n");
+    fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist480pDir . "\n");
+
+    fwrite($videoM3U8File, "#EXT-X-STREAM:INF:PROGRAM-ID=1,BANDWIDTH=2000000,CODECS=\"avc1.64001F,mp4a.40.2\"\n");
+    fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist360pDir . "\n");
+
+    fwrite($videoM3U8File, "#EXT-X-STREAM:INF:PROGRAM-ID=1,BANDWIDTH=900000,CODECS=\"avc1.64001F,mp4a.40.2\"\n");
+    fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist240pDir . "\n");
+
+    fclose($videoM3U8File);
+}
+
+function createMpdPlaylist($videoName) {
+    global $myfile;
+
 }
 
 mysqli_close($conn);
