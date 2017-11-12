@@ -101,6 +101,7 @@ header("Content-Length: $outputSize");
 header('Connection: close');
 
 // Flush all output
+fflush($myfile);
 ob_end_flush();
 ob_flush();
 flush();
@@ -203,7 +204,9 @@ if ($finalAvailableVideos - $initialAvailableVideos == 0) {
 } else {
     fwrite($myfile, "New available video. To create playlists...\n");
     createM3U8VariantPlaylist($videoTitle);
+    fflush($myfile);
     createMpdPlaylist($videoTitle);
+    fflush($myfile);
 }
 
 function createM3U8VariantPlaylist($videoName) {
@@ -218,7 +221,7 @@ function createM3U8VariantPlaylist($videoName) {
     fwrite($m3u8_480p, "#EXT-X-ENDLIST");
     fwrite($m3u8_360p, "#EXT-X-ENDLIST");
     fwrite($m3u8_240p, "#EXT-X-ENDLIST");
-    fwrite($myfile, "Completed quality playlists.");
+    fwrite($myfile, "Completed quality playlists.\n");
     fclose($m3u8_480p);
     fclose($m3u8_360p);
     fclose($m3u8_240p);
@@ -244,31 +247,171 @@ function createM3U8VariantPlaylist($videoName) {
     $json = file_get_contents("src/list.media.json");
     $originalJsonDecode = json_decode($json, JSON_OBJECT_AS_ARRAY);
     fwrite($myfile, "Existing size in JSON list: " . sizeof($originalJsonDecode) ."\n");
-
     $newJsonEntry = array(
         "name" => $videoName." (M3U8)",
         "uri" => $fullVideoUri
     );
-
     array_unshift($originalJsonDecode, $newJsonEntry);
     fwrite($myfile, "JSON entry prepared.\n");
-
-    // $newJsonStr = substr(stripcslashes(json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)), 1, -1);
+    
     $newJsonStr = json_encode($originalJsonDecode, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    // include_once("formatJson.php");
-    // fwrite($myfile, "Indenting JSON file...\n");
-    // $indentJson = indent($newJsonStr);
+    fwrite($myfile, "New Json Str: " . $newJsonStr . "\n");
+    $newJsonFile = fopen("src/list.media.json", "w+") or die("Unable to open list.media.json!");
+    fwrite($newJsonFile, $newJsonStr);
+    fclose($newJsonFile);
+} // function createM3U8VariantPlaylist($videoName)
 
+function createMpdPlaylist($videoName) {
+    global $myfile, $mpd;
+    $videoDir = "video_repo/".$videoName;
+    
+    // READ INI FILE
+    $mpdIniFile = parse_ini_file("mpd.ini"); // returns array of configurations
+    $videoCodec = $mpdIniFile["videoCodec"];
+    $minBufferTimeSec = $mpdIniFile["minBufferTimeSec"];
+    $baseUrlPrefix = $mpdIniFile["baseUrlPrefix"];
+
+    // GET TOTAL VIDEO DURATION
+    $lines240p = file("video_repo/".$videoName."/240p/mp4list.txt"); // returns array with each line in each array element
+    fwrite($myfile, "Number of lines in $videoName/240p/mp4list.txt: " . sizeof($lines240p) . "\n");
+
+    $totalStreamlets = sizeof($lines240p);
+    
+    foreach ($lines240p as &$arrline) {
+        $arrline = explode(" ", $arrline);
+    }
+    unset($arrline);
+
+    // $lines240p is now an array
+    $duration = 0;
+
+    for ($line = 0; $line < $totalStreamlets; ++$line) {
+        $duration += floatval($lines240p[$line][2]);
+    }
+
+    fwrite($myfile, "Total duration of video in seconds: " . $duration . "\n");
+
+
+    $videoMpdDir = $videoDir."/".$videoName.".mpd";
+    
+    $mpd = new XmlWriter();
+    $mpd->openURI($videoMpdDir);
+    $mpd->setIndent(TRUE);
+
+    $mpd->startDocument("1.0", "UTF-8");
+
+    $mpd->startElement("MPD");
+        $mpd->writeAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+        $mpd->writeAttribute("xmlns", "urn:mpeg:dash:schema:mpd:2011");
+        $mpd->writeAttribute("xsi:schemaLocation", "urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd");
+        $mpd->writeAttribute("type", "static");
+        $mpd->writeAttribute("mediaPresentationDuration", "PT".$duration."S");
+        $mpd->writeAttribute("minBufferTime", "PT".$minBufferTimeSec."S");
+        $mpd->writeAttribute("profiles", "urn:mpeg:dash:profile:isoff-on-demand:2011");
+
+    for ($streamletNo = 0; $streamletNo < $totalStreamlets; ++$streamletNo) {
+        // each will return directory of streamlet file for streamlet number
+        $streamlet240p = searchStreamletNo($videoName, $streamletNo, 240);
+        $streamlet360p = searchStreamletNo($videoName, $streamletNo, 360);
+        $streamlet480p = searchStreamletNo($videoName, $streamletNo, 480);
+
+        generateAdaptationSets($videoCodec, $streamletNo, $streamlet480p, $streamlet360p, $streamlet240p);
+    }
+
+    $mpd->endElement(); // MPD
+    $mpd->endDocument();
+    $mpd->flush();
+
+    // Add MPD playlist to list.media.json
+    $fullVideoUri = "http://monterosa.d2.comp.nus.edu.sg/~team07/video_repo/$videoName/$videoName.mpd";
+
+    $json = file_get_contents("src/list.media.json");
+    $originalJsonDecode = json_decode($json, JSON_OBJECT_AS_ARRAY);
+    fwrite($myfile, "Existing size in JSON list: " . sizeof($originalJsonDecode) ."\n");
+    $newJsonEntry = array(
+        "name" => $videoName." (MPD)",
+        "uri" => $fullVideoUri
+    );
+    array_unshift($originalJsonDecode, $newJsonEntry);
+    fwrite($myfile, "JSON entry prepared.\n");
+    
+    $newJsonStr = json_encode($originalJsonDecode, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     fwrite($myfile, "New Json Str: " . $newJsonStr);
     $newJsonFile = fopen("src/list.media.json", "w+") or die("Unable to open list.media.json!");
     fwrite($newJsonFile, $newJsonStr);
     fclose($newJsonFile);
-}
+} // function createMpdPlaylist($videoName)
 
-function createMpdPlaylist($videoName) {
+function searchStreamletNo($videoName, $streamletNo, $quality) {
     global $myfile;
+    $helperFile = file("video_repo/".$videoName."/".$quality."p/mp4list.txt");
 
-}
+    $totalStreamlets = sizeof($helperFile);
+
+    foreach($helperFile as &$arrline) {
+        $arrline = explode(" ", $arrline);
+    }
+    unset($arrline); // break reference
+
+    $found = -1;
+    $streamletNoStr = (string) $streamletNo;
+    fwrite($myfile, "[$quality] Searching for streamlet " . $streamletNoStr . "...\n");
+    for ($lineNo = 0; $lineNo < $totalStreamlets; ++$lineNo) {
+        $found = array_search($streamletNoStr, $helperFile[$lineNo]);
+        if ($found === 0) {
+            fwrite($myfile, "Found streamlet " . $streamletNoStr . " in line " . ($lineNo+1) . "\n");
+            fwrite($myfile, "URL of streamlet " . $streamletNoStr . " is " . $helperFile[$lineNo][1] . "\n");
+            return trim($helperFile[$lineNo][1]);
+        } else {
+            fwrite($myfile, "Not on line ". ($lineNo+1).".\n");
+            $found = -1;
+        }
+    }
+} // function searchStreamletNo($streamletNo, $quality)
+
+function generateAdaptationSets($videoCodec, $streamletNo, $streamlet480p, $streamlet360p, $streamlet240p) {
+    global $myfile, $mpd;
+    $mpd->startElement("Period");
+    $mpd->writeAttribute("id", ($streamletNo + 1));
+    $mpd->startElement("AdaptationSet");
+        $mpd->writeAttribute("mimeType", "video/mp4");
+        $mpd->writeAttribute("codecs", $videoCodec);
+        $mpd->writeAttribute("subsegmentAlignment", "true");
+        $mpd->writeAttribute("subsegmentStartsWithSAP", "1");
+
+        $mpd->startElement("Representation");
+            $mpd->writeAttribute("id", "480p");
+            $mpd->writeAttribute("bandwidth", "2800000");
+            $mpd->writeAttribute("width", "854");
+            $mpd->writeAttribute("height", "480");
+
+            $mpd->writeElement("BaseURL", $streamlet480p);
+
+        $mpd->endElement(); // Representation
+
+        $mpd->startElement("Representation");
+            $mpd->writeAttribute("id", "360p");
+            $mpd->writeAttribute("bandwidth", "2000000");
+            $mpd->writeAttribute("width", "640");
+            $mpd->writeAttribute("height", "360");
+
+            $mpd->writeElement("BaseURL", $streamlet360p);
+
+        $mpd->endElement(); // Representation
+
+        $mpd->startElement("Representation");
+            $mpd->writeAttribute("id", "240p");
+            $mpd->writeAttribute("bandwidth", "1000000");
+            $mpd->writeAttribute("width", "426");
+            $mpd->writeAttribute("height", "240");
+
+            $mpd->writeElement("BaseURL", $streamlet240p);
+
+        $mpd->endElement(); // Representation
+    $mpd->endElement(); // AdaptationSet
+$mpd->endElement(); // Period
+} // function generateAdaptationSets($streamletNo, $streamlet480p, $streamlet360p, $streamlet240p)
+
 
 mysqli_close($conn);
 fclose($myfile);
