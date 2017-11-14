@@ -24,7 +24,7 @@ echo "Transcode command: "$input_file_cmd$quality_cmd$output_file_cmd >> $OUTPUT
 echo "Output: " >> $OUTPUT_FILE"/"$QUALITY"/"transcodeLog.log
 $input_file_cmd$quality_cmd$output_file_cmd >> $OUTPUT_FILE"/"$QUALITY"/"transcodeLog.log
 ffmpeg_transcode_exit_status=$?
-#ffmpeg -i ../videos/SampleVideo_1280x720_2mb.mp4 -b:v 1000k -b:a 128k -filter:v \"scale=w=640:h=360 -bsf:v h264_mp4toannexb  360p/SampleVideo_1280x720_2mb_360p.ts
+#ffmpeg -i video_repo/<videoTitle>/<originalStreamlet.mp4> -b:v 1000k -b:a 128k -filter:v \"scale=w=640:360 video_repo/<videoTitle>/360p/<newStreamlet.mp4>
 
 #APPEND TO TXT FILE TO LIST STREAMLETS IN ORDER
 mp4_streamlet_duration_in_seconds=$(ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $output_file_cmd)
@@ -38,19 +38,29 @@ echo "Output: " >> $OUTPUT_FILE"/"$QUALITY"/"transcodeLog.log
 mp42ts $ts_input_file $ts_output_file >> $OUTPUT_FILE"/"$QUALITY"/"transcodeLog.log
 mp42ts_convert_exit_status=$?
 
-#APPEND TO FILE TO LIST STREAMLETS IN ORDER
+APPEND TO FILE TO LIST STREAMLETS IN ORDER
 m3u8file=$OUTPUT_FILE/$QUALITY/$QUALITY.m3u8
 if [ ! -f $m3u8file ]
 then
 echo \#EXTM3U >> $m3u8file
-echo \#EXT-X-VERSION=3 >> $m3u8file
+echo \#EXT-X-VERSION:3 >> $m3u8file
 echo \#EXT-X-MEDIA-SEQUENCE:0 >> $m3u8file
+echo \#EXT-X-TARGETDURATION:3 >> $m3u8file
 echo \#EXT-X-PLAYLIST-TYPE:VOD >> $m3u8file
 chmod 777 $m3u8file
 fi
 
+ts_streamlet_duration=$(MP4Box -info $ts_output_file 2>&1 | grep Duration) # | awk '{print $2}')
+duration_result=$?
+if [ "$duration_result" -eq "1" ]
+then
 ts_streamlet_duration_in_seconds=$(ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $ts_output_file)
-echo $STREAMLET_NUMBER $url_base$ts_output_file $ts_streamlet_duration_in_seconds >> $OUTPUT_FILE/$QUALITY/tslist.txt
-echo $(basename "${ts_output_file}") >> $m3u8file
+else
+ts_streamlet_duration_in_seconds=$(echo $ts_streamlet_duration | awk '{print $2}')
+fi
+
+ts_output_file_base=$(basename "${ts_output_file}")
+echo $STREAMLET_NUMBER $ts_output_file_base $ts_streamlet_duration_in_seconds >> $OUTPUT_FILE/$QUALITY/tslist.txt
+
 #SEND BACK TO upload.php
 echo "["$ffmpeg_transcode_exit_status"]["$mp42ts_convert_exit_status"]"

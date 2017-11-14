@@ -1,10 +1,12 @@
 <?php
-// PARAMETERS EXPECTED
-// $_POST["deviceId"];
-// $_POST["videoTitle"];
-// $_POST["totalStreamlets"]
-// $_POST["streamletNo"];
-// $_FILES["fileToUpload"]["name"])
+/**
+ * Script to handle uploading of video files
+ * @param $_POST["deviceId"];
+ * @param $_POST["videoTitle"];
+ * @param $_POST["totalStreamlets"]
+ * @param $_POST["streamletNo"];
+ * @param $_FILES["fileToUpload"]["name"])
+ */
 
 if (empty($_POST["deviceId"]) || empty($_POST["videoTitle"] || empty($_POST["totalStreamlets"] || empty($_POST["streamletNo"])))) {
     exit("Expecting parameters deviceId, videoTitle, totalStreamlets, streamletNo");
@@ -26,6 +28,9 @@ fwrite($myfile, "Streamlet no: ".$_POST["streamletNo"]."\n");
 // Create connection
 $conn = mysqli_connect($servername, $username, $password, $db);
 
+// buffer all upcoming output
+ob_start();
+
 // Check connection
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
@@ -35,10 +40,10 @@ if ($conn->connect_error) {
     echo "Connected to DB.<br/>";
 }
 
-$videoTitle =  $_POST["videoTitle"];
+$videoTitle =  basename($_POST["videoTitle"], ".mp4");
 
 $target_dir = "video_repo/";
-$target_file = $target_dir . $_POST["videoTitle"] . "/" . basename($_FILES["fileToUpload"]["name"]);
+$target_file = $target_dir . $videoTitle . "/" . basename($_FILES["fileToUpload"]["name"]);
 $uploadOk = 1;
 $imageFileType = pathinfo($target_file,PATHINFO_EXTENSION);
 
@@ -52,7 +57,7 @@ if (file_exists($target_file)) {
 }
 
 // Allow certain file formats
-if($imageFileType == "mp4" || $imageFileType == "m4s" || $imageFileType = "ts") {
+if($imageFileType == "mp4" || $imageFileType == "m4s" || $imageFileType == "ts") {
     echo "File type: " . $imageFileType . "<br/>";
 } else {
     echo "Sorry, only MP4/M4S/TS file types are allowed.<br/>";
@@ -69,7 +74,7 @@ if ($uploadOk == 0) {
 
 // if everything is ok, try to upload file
 } else {
-    $file_dir = SITE_ROOT."/video_repo/" . $_POST["videoTitle"];
+    $file_dir = SITE_ROOT."/video_repo/" . $videoTitle;
     if (!file_exists($file_dir)) {
         shell_exec ("mkdir " . $file_dir);
         shell_exec ("chmod 777 " . $file_dir);
@@ -107,16 +112,16 @@ ob_flush();
 flush();
 
 // close current session
-if (session_id()) session_write_close();
+// if (session_id()) session_write_close();
 
 // Start background processes
 
-$findQuery = "SELECT * FROM UPLOAD_VIDEO WHERE VIDEO_TITLE = '" . $_POST["videoTitle"]. "';";
+$findQuery = "SELECT * FROM UPLOAD_VIDEO WHERE VIDEO_TITLE = '" . $videoTitle. "';";
 
 $uploadedNumberOfStreamlets = 0;
 $newNumberOfStreamlets = 0;
 
-$insertQuery = "INSERT INTO UPLOAD_VIDEO (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES (NULL, '" . $_POST["deviceId"] . "', '" . $_POST["videoTitle"] . "', " . $_POST["totalStreamlets"] . ", '1', CURRENT_TIMESTAMP, '0', '0', '0');";
+$insertQuery = "INSERT INTO UPLOAD_VIDEO (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES (NULL, '" . $_POST["deviceId"] . "', '" . $videoTitle . "', " . $_POST["totalStreamlets"] . ", '1', CURRENT_TIMESTAMP, '0', '0', '0');";
 
 $findResult = $conn->query($findQuery);
 if ($findResult->num_rows > 0) {
@@ -187,6 +192,8 @@ if (end($output480p) == "[0][0]") {
     include("updateSqlTranscodeStatus.php");
 }
 
+fwrite($myfile, "Uploading and processing of video streamlet $streamletNo completed.\n");
+
 $finalAvailableVideos = 0;
 // Retrieve final count of AVAILABLE_VIDEOS
 $finalAvailableResult = $conn->query("SELECT COUNT(*) FROM AVAILABLE_VIDEOS;");
@@ -207,48 +214,88 @@ if ($finalAvailableVideos - $initialAvailableVideos == 0) {
     fflush($myfile);
     createMpdPlaylist($videoTitle);
     fflush($myfile);
+    fwrite($myfile, "Uploading and processing of video [$videoTitle] completed.\n");
 }
 
+/**
+ * 1. Generates the m3u8 playlists for 240p, 360p and 480p streams
+ * 2. Generates the variant playlist for the video
+ * 3. Update to list.m3u8.json (read by HTML/PHP file m3u8list.php)
+ */
 function createM3U8VariantPlaylist($videoName) {
     global $myfile;
     $videoDir =  "video_repo/". $videoName;
-    $playlist480pDir = $videoDir . "/480p/480p.m3u8";
-    $playlist360pDir = $videoDir . "/360p/360p.m3u8";
+
     $playlist240pDir = $videoDir . "/240p/240p.m3u8";
-    $m3u8_480p = fopen($playlist480pDir, "a+") or die("Unable to open $playlist480pDir");
-    $m3u8_360p = fopen($playlist360pDir, "a+") or die("Unable to open $playlist360pDir");
-    $m3u8_240p = fopen($playlist240pDir, "a+") or die("Unable to open $playlist240pDir");
-    fwrite($m3u8_480p, "#EXT-X-ENDLIST");
-    fwrite($m3u8_360p, "#EXT-X-ENDLIST");
+    $m3u8_240p = fopen($playlist240pDir, "a+") or fwrite($myfile, "Unable to write to $playlist240pDir!\n");
+
+    $playlist360pDir = $videoDir . "/360p/360p.m3u8";
+    $m3u8_360p = fopen($playlist360pDir, "a+") or fwrite($myfile, "Unable to write to $playlist360pDir!\n");
+
+    $playlist480pDir = $videoDir . "/480p/480p.m3u8";
+    $m3u8_480p = fopen($playlist480pDir, "a+") or fwrite($myfile, "Unable to write to $playlist480pDir!\n");
+
+    // read helper file
+    $lines240p = file("video_repo/$videoName/240p/tslist.txt"); // returns array with each line in each array element
+    fwrite($myfile, "Number of lines in $videoName/240p/tslist.txt: ". sizeof($lines240p) . "\n");
+
+    $totalStreamlets = sizeof($lines240p);
+    
+    foreach ($lines240p as &$arrline) {
+        $arrline = explode(" ", $arrline);
+    }
+    unset($arrline);
+
+    // for each streamlet
+    for ($streamletNo = 0; $streamletNo < $totalStreamlets; ++$streamletNo) {
+        $streamlet240pArr = getStreamletResult($videoName, $streamletNo, 240);
+        $streamlet360pArr = getStreamletResult($videoName, $streamletNo, 360);
+        $streamlet480pArr = getStreamletResult($videoName, $streamletNo, 480);
+
+        fwrite($m3u8_240p, "#EXTINF:".$streamlet240pArr["duration"]."\n");
+        fwrite($m3u8_240p, $streamlet240pArr["uri"] . "\n");
+
+        fwrite($m3u8_360p, "#EXTINF:".$streamlet360pArr["duration"]."\n");
+        fwrite($m3u8_360p, $streamlet360pArr["uri"] . "\n");
+
+        fwrite($m3u8_480p, "#EXTINF:".$streamlet480pArr["duration"]."\n");
+        fwrite($m3u8_480p, $streamlet480pArr["uri"] . "\n");
+    }
+
     fwrite($m3u8_240p, "#EXT-X-ENDLIST");
-    fwrite($myfile, "Completed quality playlists.\n");
-    fclose($m3u8_480p);
-    fclose($m3u8_360p);
     fclose($m3u8_240p);
 
+    fwrite($m3u8_360p, "#EXT-X-ENDLIST");
+    fclose($m3u8_360p);
+
+    fwrite($m3u8_480p, "#EXT-X-ENDLIST");
+    fclose($m3u8_480p);
+
+    fwrite($myfile, "Completed quality playlists.\n");
+    
     $videoM3U8Dir = $videoDir."/".$videoName.".m3u8";
     $videoM3U8File = fopen($videoM3U8Dir, "w+") or die ("Unable to create $videoM3U8File");
     fwrite($videoM3U8File, "#EXTM3U\n");
+    fwrite($videoM3U8file, "\#EXT-X-INDEPENDENT-SEGMENTS\n");
+    fwrite($videoM3U8File, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=2800000,CODECS=\"avc1.64001F,mp4a.40.2\",RESOLUTION=854x480,FRAME-RATE=30.000\n");
+    fwrite($videoM3U8File, "480p/480p.m3u8\n");
 
-    fwrite($videoM3U8File, "#EXT-X-STREAM:INF:PROGRAM-ID=1,BANDWIDTH=2800000,CODECS=\"avc1.64001F,mp4a.40.2\"\n");
-    fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist480pDir . "\n");
+    fwrite($videoM3U8File, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=2000000,CODECS=\"avc1.64001F,mp4a.40.2\",RESOLUTION=640x360,FRAME-RATE=30.000\n");
+    fwrite($videoM3U8File, "360p/360p.m3u8\n");
 
-    fwrite($videoM3U8File, "#EXT-X-STREAM:INF:PROGRAM-ID=1,BANDWIDTH=2000000,CODECS=\"avc1.64001F,mp4a.40.2\"\n");
-    fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist360pDir . "\n");
-
-    fwrite($videoM3U8File, "#EXT-X-STREAM:INF:PROGRAM-ID=1,BANDWIDTH=900000,CODECS=\"avc1.64001F,mp4a.40.2\"\n");
-    fwrite($videoM3U8File, "http://monterosa.d2.comp.nus.edu.sg/~team07/". $playlist240pDir . "\n");
+    fwrite($videoM3U8File, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=900000,CODECS=\"avc1.64001F,mp4a.40.2\",RESOLUTION=426x240,FRAME-RATE=30.000\n");
+    fwrite($videoM3U8File, "240p/240p.m3u8\n");
 
     fclose($videoM3U8File);
 
-    // Add to src/list.media.json
+    // Add to src/list.m3u8.json
     $fullVideoUri = "http://monterosa.d2.comp.nus.edu.sg/~team07/video_repo/$videoName/$videoName.m3u8";
 
-    $json = file_get_contents("src/list.media.json");
+    $json = file_get_contents("src/list.m3u8.json");
     $originalJsonDecode = json_decode($json, JSON_OBJECT_AS_ARRAY);
     fwrite($myfile, "Existing size in JSON list: " . sizeof($originalJsonDecode) ."\n");
     $newJsonEntry = array(
-        "name" => $videoName." (M3U8)",
+        "name" => $videoName,
         "uri" => $fullVideoUri
     );
     array_unshift($originalJsonDecode, $newJsonEntry);
@@ -256,11 +303,15 @@ function createM3U8VariantPlaylist($videoName) {
     
     $newJsonStr = json_encode($originalJsonDecode, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     fwrite($myfile, "New Json Str: " . $newJsonStr . "\n");
-    $newJsonFile = fopen("src/list.media.json", "w+") or die("Unable to open list.media.json!");
-    fwrite($newJsonFile, $newJsonStr);
+    $newJsonFile = fopen("src/list.m3u8.json", "w+") or fwrite($myfile, "Unable to open list.m3u8.json!");
+    fwrite($newJsonFile, $newJsonStr . "\n");
     fclose($newJsonFile);
 } // function createM3U8VariantPlaylist($videoName)
 
+/**
+ * 1. Generates the MPD playlist for the video
+ * 2. Update to list.media.json (read by player app)
+ */
 function createMpdPlaylist($videoName) {
     global $myfile, $mpd;
     $videoDir = "video_repo/".$videoName;
@@ -290,7 +341,6 @@ function createMpdPlaylist($videoName) {
     }
 
     fwrite($myfile, "Total duration of video in seconds: " . $duration . "\n");
-
 
     $videoMpdDir = $videoDir."/".$videoName.".mpd";
     
@@ -329,7 +379,7 @@ function createMpdPlaylist($videoName) {
     $originalJsonDecode = json_decode($json, JSON_OBJECT_AS_ARRAY);
     fwrite($myfile, "Existing size in JSON list: " . sizeof($originalJsonDecode) ."\n");
     $newJsonEntry = array(
-        "name" => $videoName." (MPD)",
+        "name" => $videoName,
         "uri" => $fullVideoUri
     );
     array_unshift($originalJsonDecode, $newJsonEntry);
@@ -342,6 +392,47 @@ function createMpdPlaylist($videoName) {
     fclose($newJsonFile);
 } // function createMpdPlaylist($videoName)
 
+/**
+ * @param integer $quality(240, 360, 480)
+ * @return array single element array with uri and duration
+ */
+function getStreamletResult($videoName, $streamletNo, $quality) {
+    global $myfile;
+    $helperFile = file("video_repo/".$videoName."/".$quality."p/tslist.txt");
+    $totalStreamlets = sizeof($helperFile);
+
+    foreach($helperFile as &$arrline) {
+        $arrline = explode(" ", $arrline);
+    }
+    unset($arrline); // break reference
+
+    $found = -1;
+    $streamletNoStr = (string) $streamletNo;
+    fwrite($myfile, "[$quality] Searching for streamlet " . $streamletNoStr . "...\n");
+    for ($lineNo = 0; $lineNo < $totalStreamlets; ++$lineNo) {
+        $found = array_search($streamletNoStr, $helperFile[$lineNo]);
+        if ($found === 0) {
+            fwrite($myfile, "Found streamlet " . $streamletNoStr . " in line " . ($lineNo+1) . "\n");
+            fwrite($myfile, "URI of streamlet " . $streamletNoStr . " is " . $helperFile[$lineNo][1] . "\n");
+            $returnObj = array(
+                "uri" => trim($helperFile[$lineNo][1]),
+                "duration" => trim($helperFile[$lineNo][2])
+            );
+            return $returnObj;
+        } else {
+            fwrite($myfile, "Not on line ". ($lineNo+1).".\n");
+            $found = -1;
+        }
+    }
+} // function getStreamletResult($videoName, $streamletNo, $quality)
+
+
+/**
+ * Helper function to retrieve the full URL of the streamlet number stored in the helper file.
+ * @param string $videoName
+ * @param integer $streamletNo
+ * @param integer $quality
+ */
 function searchStreamletNo($videoName, $streamletNo, $quality) {
     global $myfile;
     $helperFile = file("video_repo/".$videoName."/".$quality."p/mp4list.txt");
@@ -367,7 +458,7 @@ function searchStreamletNo($videoName, $streamletNo, $quality) {
             $found = -1;
         }
     }
-} // function searchStreamletNo($streamletNo, $quality)
+} // function searchStreamletNo($videoName, $streamletNo, $quality)
 
 function generateAdaptationSets($videoCodec, $streamletNo, $streamlet480p, $streamlet360p, $streamlet240p) {
     global $myfile, $mpd;
@@ -411,7 +502,6 @@ function generateAdaptationSets($videoCodec, $streamletNo, $streamlet480p, $stre
     $mpd->endElement(); // AdaptationSet
 $mpd->endElement(); // Period
 } // function generateAdaptationSets($streamletNo, $streamlet480p, $streamlet360p, $streamlet240p)
-
 
 mysqli_close($conn);
 fclose($myfile);
