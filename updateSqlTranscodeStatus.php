@@ -10,12 +10,15 @@ $updateFindQuery = "SELECT * FROM UPLOAD_VIDEO WHERE VIDEO_TITLE = '" . $videoTi
 switch ($quality) {
     case "480p":
     $transcodeColumn = "LAST_TRANSCODED_STREAMLET_480P";
+    $subDir = "video_repo/$videoTitle/480p/";
     break;
     case "360p":
     $transcodeColumn = "LAST_TRANSCODED_STREAMLET_360P";
+    $subDir = "video_repo/$videoTitle/360p/";
     break;
     case "240p":
     $transcodeColumn = "LAST_TRANSCODED_STREAMLET_240P";
+    $subDir = "video_repo/$videoTitle/240p/";
     break;
     default:
     break;
@@ -31,7 +34,10 @@ if ($updateFindResult->num_rows > 0) {
     $row = $updateFindResult->fetch_assoc();
     $idx = $row["IDX"];
     $transcodedNumberOfStreamlets = $row[$transcodeColumn];
-    $newNumberOfTranscoded = $transcodedNumberOfStreamlets + 1;
+    
+    $newNumberOfTranscodedStr = shell_exec("ls -l $subDir/*.mp4 | wc -l");
+    $newNumberOfTranscoded = (integer) $newNumberOfTranscodedStr;
+    // $newNumberOfTranscoded = $transcodedNumberOfStreamlets + 1;
 
     $updateUpdateQuery = "UPDATE UPLOAD_VIDEO SET `$transcodeColumn` = $newNumberOfTranscoded  WHERE IDX = $idx;" ;
     fwrite($updateLogFile, "Update query: \n".$updateUpdateQuery."\n");

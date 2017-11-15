@@ -129,7 +129,9 @@ if ($findResult->num_rows > 0) {
     $row = $findResult->fetch_assoc();
     $idx = $row["IDX"];
     $uploadedNumberOfStreamlets = $row["UPLOADED_NUMBER_OF_STREAMLETS"];
-    $newNumberOfStreamlets = $uploadedNumberOfStreamlets + 1;
+
+    $newNumberOfStreamletsStr = shell_exec("ls -l $file_dir/*.mp4 | ws -l");
+    $newNumberOfStreamlets = (integer) $uploadedNumberOfStreamlets;
 
     $updateQuery = "UPDATE UPLOAD_VIDEO SET `UPLOADED_NUMBER_OF_STREAMLETS` = ". $newNumberOfStreamlets  ." WHERE IDX = ". $idx .";" ;
     $updateResult = $conn->query($updateQuery);
