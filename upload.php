@@ -118,10 +118,11 @@ flush();
 
 $findQuery = "SELECT * FROM UPLOAD_VIDEO WHERE VIDEO_TITLE = '" . $videoTitle. "';";
 
-$uploadedNumberOfStreamlets = 0;
+$uploadedNumberOfStreamletsStr = shell_exec("ls -l $file_dir/*.mp4 | wc -l");
+$uploadedNumberOfStreamlets = (integer) $uploadNumberOfStreamlets;
 $newNumberOfStreamlets = 0;
 
-$insertQuery = "INSERT INTO UPLOAD_VIDEO (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES (NULL, '" . $_POST["deviceId"] . "', '" . $videoTitle . "', " . $_POST["totalStreamlets"] . ", '1', CURRENT_TIMESTAMP, '0', '0', '0');";
+$insertQuery = "INSERT INTO UPLOAD_VIDEO (`IDX`, `UPLOAD_DEVICE_ID`, `VIDEO_TITLE`, `TOTAL_NUMBER_OF_STREAMLETS`, `UPLOADED_NUMBER_OF_STREAMLETS`, `LAST_UPLOAD_TIME`, `LAST_TRANSCODED_STREAMLET_240P`, `LAST_TRANSCODED_STREAMLET_360P`, `LAST_TRANSCODED_STREAMLET_480P`) VALUES (NULL, '" . $_POST["deviceId"] . "', '" . $videoTitle . "', " . $_POST["totalStreamlets"] . ", '$uploadedNumberOfStreamlets', CURRENT_TIMESTAMP, '0', '0', '0');";
 
 $findResult = $conn->query($findQuery);
 if ($findResult->num_rows > 0) {
@@ -130,7 +131,7 @@ if ($findResult->num_rows > 0) {
     $idx = $row["IDX"];
     $uploadedNumberOfStreamlets = $row["UPLOADED_NUMBER_OF_STREAMLETS"];
 
-    $newNumberOfStreamletsStr = shell_exec("ls -l $file_dir/*.mp4 | ws -l");
+    $newNumberOfStreamletsStr = shell_exec("ls -l $file_dir/*.mp4 | wc -l");
     $newNumberOfStreamlets = (integer) $uploadedNumberOfStreamlets;
 
     $updateQuery = "UPDATE UPLOAD_VIDEO SET `UPLOADED_NUMBER_OF_STREAMLETS` = ". $newNumberOfStreamlets  ." WHERE IDX = ". $idx .";" ;
