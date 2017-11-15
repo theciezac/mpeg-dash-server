@@ -50,14 +50,7 @@ echo \#EXT-X-PLAYLIST-TYPE:VOD >> $m3u8file
 chmod 777 $m3u8file
 fi
 
-ts_streamlet_duration=$(MP4Box -info $ts_output_file 2>&1 | grep Duration) # | awk '{print $2}')
-duration_result=$?
-if [ "$duration_result" -eq "1" ]
-then
 ts_streamlet_duration_in_seconds=$(ffprobe -v error -select_streams v:0 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $ts_output_file)
-else
-ts_streamlet_duration_in_seconds=$(echo $ts_streamlet_duration | awk '{print $2}')
-fi
 
 ts_output_file_base=$(basename "${ts_output_file}")
 echo $STREAMLET_NUMBER $ts_output_file_base $ts_streamlet_duration_in_seconds >> $OUTPUT_FILE/$QUALITY/tslist.txt
